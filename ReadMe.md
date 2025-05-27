@@ -1,8 +1,8 @@
-[![CMake workflow](https://github.com/LegalizeAdulthood/utahcpp-project-template/actions/workflows/cmake.yml/badge.svg)](https://github.com/LegalizeAdulthood/utahcpp-project-template/actions/workflows/cmake.yml)
+[![CMake workflow](https://github.com/LegalizeAdulthood/asmtk-example/actions/workflows/cmake.yml/badge.svg)](https://github.com/LegalizeAdulthood/asmtk-example/actions/workflows/cmake.yml)
 
-# Project Template
+# AsmTk Example
 
-Sample code for the video Project Template.
+Sample code for the video JIT Code Generation with AsmJit and AsmTk.
 
 [Utah C++ Programmers](https://meetup.com/utah-cpp-programmers)\
 [Past Topics](https://utahcpp.wordpress.com/past-meeting-topics/)\
