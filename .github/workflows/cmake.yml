@@ -10,9 +10,9 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ ubuntu-latest, windows-latest, macos-13 ]
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
         include:
-          - os: macos-13
+          - os: macos-latest
             nuget: mono `./vcpkg/vcpkg fetch nuget | tail -n 1`
           - os: ubuntu-latest
             nuget: mono `./vcpkg/vcpkg fetch nuget | tail -n 1`
@@ -37,7 +37,7 @@ jobs:
         sudo apt install mono-complete
 
     - name: Install Prerequisites macOS
-      if: ${{matrix.os == 'macos-13'}}
+      if: ${{matrix.os == 'macos-latest'}}
       shell: bash
       run: |
         ${{github.workspace}}/vcpkg/bootstrap-vcpkg.sh

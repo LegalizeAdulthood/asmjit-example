@@ -17,7 +17,7 @@
       "hidden": true,
       "description": "Set the project name from the preset name",
       "cacheVariables": {
-        "ASMTK_PROJECT_NAME": "AsmTk Example ${presetName}"
+        "ASMJIT_PROJECT_NAME": "AsmJit Example ${presetName}"
       }
     },
     {

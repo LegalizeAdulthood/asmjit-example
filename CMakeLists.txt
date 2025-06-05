@@ -8,8 +8,8 @@ include(vs_startup_project)
 
 set_cxx_standard(17)
 
-set(ASMTK_PROJECT_NAME "AsmTk Example" CACHE "STRING" "Default project name for IDEs")
-project("${ASMTK_PROJECT_NAME}" CXX)
+set(ASMJIT_PROJECT_NAME "AsmJit Example" CACHE "STRING" "Default project name for IDEs")
+project("${ASMJIT_PROJECT_NAME}" CXX)
 
 include(CTest)
 
