@@ -1,10 +1,13 @@
 #include "formula/formula.h"
 
+#include <asmjit/core.h>
+#include <asmjit/x86.h>
 #include <boost/parser/parser.hpp>
 
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -27,6 +30,8 @@ public:
     virtual ~Node() = default;
 
     virtual double evaluate(const SymbolTable &symbols) const = 0;
+
+    virtual bool assemble(asmjit::x86::Assembler &assem) const = 0;
 };
 
 class NumberNode : public Node
@@ -38,9 +43,15 @@ public:
     }
     ~NumberNode() override = default;
 
-    double evaluate(const SymbolTable &/*symbols*/) const override
+    double evaluate(const SymbolTable & /*symbols*/) const override
     {
         return m_value;
+    }
+
+    bool assemble(asmjit::x86::Assembler &assem) const override
+    {
+        assem.mov(asmjit::x86::eax, m_value);
+        return true;
     }
 
 private:
@@ -65,6 +76,11 @@ public:
             return it->second;
         }
         return 0.0;
+    }
+
+    bool assemble(asmjit::x86::Assembler &assem) const override
+    {
+        return false;
     }
 
 private:
@@ -96,6 +112,11 @@ public:
         throw std::runtime_error(std::string{"Invalid unary prefix operator '"} + m_op + "'");
     }
 
+    bool assemble(asmjit::x86::Assembler &assem) const override
+    {
+        return false;
+    }
+
 private:
     char m_op;
     std::shared_ptr<Node> m_operand;
@@ -117,6 +138,11 @@ public:
     ~BinaryOpNode() override = default;
 
     double evaluate(const SymbolTable &symbols) const override;
+
+    bool assemble(asmjit::x86::Assembler &assem) const override
+    {
+        return false;
+    }
 
 private:
     std::shared_ptr<Node> m_left;
@@ -202,14 +228,39 @@ public:
 
     double evaluate() override;
 
+    bool assemble() override;
+
 private:
     SymbolTable m_symbols;
     std::shared_ptr<Node> m_ast;
+    std::function<double(const SymbolTable &)> m_function;
 };
 
 double ParsedFormula::evaluate()
 {
-    return m_ast->evaluate(m_symbols);
+    return m_function ? m_function(m_symbols) : m_ast->evaluate(m_symbols);
+}
+
+bool ParsedFormula::assemble()
+{
+    asmjit::JitRuntime runtime;
+    asmjit::CodeHolder code;
+    code.init(runtime.environment(), runtime.cpuFeatures());
+    asmjit::x86::Assembler assem(&code);
+    if (!m_ast->assemble(assem))
+    {
+        std::cerr << "Failed to compile AST\n";
+        return false;
+    }
+    assem.ret();
+
+    if (const asmjit::Error err = runtime.add(&m_function, &code))
+    {
+        std::cerr << "Failed to compile formula: " << asmjit::DebugUtils::errorAsString(err) << '\n';
+        return false;
+    }
+
+    return true;
 }
 
 } // namespace

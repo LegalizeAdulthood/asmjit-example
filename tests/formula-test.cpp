@@ -136,3 +136,21 @@ TEST(TestFormulaEvaluate, twoPi)
 
     ASSERT_NEAR(6.28318, formula->evaluate(), 1e-5);
 }
+
+TEST(TestAssembledFormulaEvaluate, one)
+{
+    const auto formula{formula::parse("1")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->assemble());
+
+    ASSERT_EQ(1.0, formula->evaluate());
+}
+
+TEST(TestAssembledFormulaEvaluate, two)
+{
+    const auto formula{formula::parse("2")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->assemble());
+
+    ASSERT_EQ(2.0, formula->evaluate());
+}
