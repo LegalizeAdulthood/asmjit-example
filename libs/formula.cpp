@@ -116,6 +116,20 @@ public:
 
     bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override
     {
+        if (m_op == '+')
+        {
+            return m_operand->assemble(assem, symbols);
+        }
+        if (m_op == '-')
+        {
+            if (!m_operand->assemble(assem, symbols))
+            {
+                return false;
+            }
+            assem.neg(asmjit::x86::eax); // Negate the value in eax
+            return true;
+        }
+
         return false;
     }
 
