@@ -2,9 +2,28 @@
 
 #include <iostream>
 #include <string>
+#include <string_view>
+#include <vector>
 
-int main()
+namespace
 {
+
+int main(const std::vector<std::string_view> &args)
+{
+    bool assemble{};
+    if (args.size() == 2)
+    {
+        if (args[1] == "--assemble")
+        {
+            assemble = true;
+        }
+        else
+        {
+            std::cerr << "Usage: " << args[0] << " [--assemble]\n";
+            return 1;
+        }
+    }
+
     std::cout << "Enter an expression:\n";
     std::string line;
     std::getline(std::cin, line);
@@ -15,6 +34,24 @@ int main()
         return 1;
     }
 
+    if (assemble && !formula->assemble())
+    {
+        std::cerr << "Error: Failed to assemble formula\n";
+        return 1;
+    }
+
     std::cout << "Evaluated: " << formula->evaluate() << '\n';
     return 0;
+}
+
+} // namespace
+
+int main(int argc, char *argv[])
+{
+    std::vector<std::string_view> args;
+    for (int i = 0; i < argc; ++i)
+    {
+        args.emplace_back(argv[i]);
+    }
+    return main(args);
 }
