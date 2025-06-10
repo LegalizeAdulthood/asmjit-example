@@ -11,15 +11,20 @@ namespace
 int main(const std::vector<std::string_view> &args)
 {
     bool assemble{};
+    bool compile{};
     if (args.size() == 2)
     {
         if (args[1] == "--assemble")
         {
             assemble = true;
         }
+        else if (args[1] == "--compile")
+        {
+            compile = true;
+        }
         else
         {
-            std::cerr << "Usage: " << args[0] << " [--assemble]\n";
+            std::cerr << "Usage: " << args[0] << " [--assemble | --compile]\n";
             return 1;
         }
     }
@@ -37,6 +42,11 @@ int main(const std::vector<std::string_view> &args)
     if (assemble && !formula->assemble())
     {
         std::cerr << "Error: Failed to assemble formula\n";
+        return 1;
+    }
+    if (compile && !formula->compile())
+    {
+        std::cerr << "Error: Failed to compile formula\n";
         return 1;
     }
 

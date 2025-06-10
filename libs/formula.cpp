@@ -30,8 +30,8 @@ public:
     virtual ~Node() = default;
 
     virtual double evaluate(const SymbolTable &symbols) const = 0;
-
     virtual bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const = 0;
+    virtual bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const = 0;
 };
 
 class NumberNode : public Node
@@ -51,6 +51,12 @@ public:
     bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override
     {
         assem.mov(asmjit::x86::eax, m_value);
+        return true;
+    }
+
+    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override
+    {
+        comp.mov(asmjit::x86::eax, m_value);
         return true;
     }
 
@@ -82,6 +88,13 @@ public:
     {
         const double value{evaluate(symbols)};
         assem.mov(asmjit::x86::eax, value);
+        return true;
+    }
+
+    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override
+    {
+        const double value{evaluate(map)};
+        comp.mov(asmjit::x86::eax, value);
         return true;
     }
 
@@ -133,6 +146,25 @@ public:
         return false;
     }
 
+    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override
+    {
+        if (m_op == '+')
+        {
+            return m_operand->compile(comp, map);
+        }
+        if (m_op == '-')
+        {
+            if (!m_operand->compile(comp, map))
+            {
+                return false;
+            }
+            comp.neg(asmjit::x86::eax); // Negate the value in eax
+            return true;
+        }
+
+        return false;
+    }
+
 private:
     char m_op;
     std::shared_ptr<Node> m_operand;
@@ -156,6 +188,8 @@ public:
     double evaluate(const SymbolTable &symbols) const override;
 
     bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override;
+
+    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override;
 
 private:
     std::shared_ptr<Node> m_left;
@@ -210,7 +244,36 @@ bool BinaryOpNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &sy
     if (m_op == '/')
     {
         assem.xor_(asmjit::x86::edx, asmjit::x86::edx); // Clear edx for division
-        assem.div(asmjit::x86::ebx); // Perform division
+        assem.div(asmjit::x86::ebx);                    // Perform division
+        return true;
+    }
+    return false;
+}
+
+bool BinaryOpNode::compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const
+{
+    m_left->compile(comp, map);
+    comp.push(asmjit::x86::eax); // Save left operand
+    m_right->compile(comp, map);
+    comp.pop(asmjit::x86::ebx); // Load left operand into ebx
+    if (m_op == '+')
+    {
+        comp.add(asmjit::x86::eax, asmjit::x86::ebx);
+        return true;
+    }
+    if (m_op == '-')
+    {
+        comp.sub(asmjit::x86::eax, asmjit::x86::ebx);
+        return true;
+    }
+    if (m_op == '*')
+    {
+        comp.mul(asmjit::x86::eax, asmjit::x86::ebx);
+        return true;
+    }
+    if (m_op == '/')
+    {
+        comp.div(asmjit::x86::ebx, asmjit::x86::eax);
         return true;
     }
     return false;
@@ -270,8 +333,8 @@ public:
     ~ParsedFormula() override = default;
 
     double evaluate() override;
-
     bool assemble() override;
+    bool compile() override;
 
 private:
     SymbolTable m_symbols;
@@ -296,6 +359,30 @@ bool ParsedFormula::assemble()
         return false;
     }
     assem.ret();
+
+    if (const asmjit::Error err = runtime.add(&m_function, &code))
+    {
+        std::cerr << "Failed to compile formula: " << asmjit::DebugUtils::errorAsString(err) << '\n';
+        return false;
+    }
+
+    return true;
+}
+
+bool ParsedFormula::compile()
+{
+    asmjit::JitRuntime runtime;
+    asmjit::CodeHolder code;
+    code.init(runtime.environment(), runtime.cpuFeatures());
+    asmjit::x86::Compiler comp(&code);
+    comp.addFunc(asmjit::FuncSignature::build<double>());
+    if (!m_ast->compile(comp, m_symbols))
+    {
+        std::cerr << "Failed to compile AST\n";
+        return false;
+    }
+    comp.endFunc();
+    comp.finalize();
 
     if (const asmjit::Error err = runtime.add(&m_function, &code))
     {

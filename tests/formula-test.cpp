@@ -237,3 +237,102 @@ TEST(TestAssembledFormulaEvaluate, addMulAdd)
 
     ASSERT_NEAR(12.76, formula->evaluate(), 1e-6);
 }
+
+TEST(TestCompiledFormulaEvaluate, one)
+{
+    const auto formula{formula::parse("1")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->compile());
+
+    ASSERT_EQ(1.0, formula->evaluate());
+}
+
+TEST(TestCompiledFormulaEvaluate, two)
+{
+    const auto formula{formula::parse("2")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->compile());
+
+    ASSERT_EQ(2.0, formula->evaluate());
+}
+
+TEST(TestCompiledFormulaEvaluate, identifier)
+{
+    const auto formula{formula::parse("e")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->compile());
+
+    ASSERT_NEAR(std::exp(1.0), formula->evaluate(), 1e-6);
+}
+
+TEST(TestCompiledFormulaEvaluate, add)
+{
+    const auto formula{formula::parse("1.2+1.2")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->compile());
+
+    ASSERT_NEAR(2.4, formula->evaluate(), 1e-6);
+}
+
+TEST(TestCompiledFormulaEvaluate, subtract)
+{
+    const auto formula{formula::parse("1.5-2.2")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->compile());
+
+    ASSERT_NEAR(-0.7, formula->evaluate(), 1e-6);
+}
+
+TEST(TestCompiledFormulaEvaluate, multiply)
+{
+    const auto formula{formula::parse("2.2*3.1")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->compile());
+
+    ASSERT_NEAR(6.82, formula->evaluate(), 1e-6);
+}
+
+TEST(TestCompiledFormulaEvaluate, divide)
+{
+    const auto formula{formula::parse("13.76/4.3")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->compile());
+
+    ASSERT_NEAR(3.2, formula->evaluate(), 1e-6);
+}
+
+TEST(TestCompiledFormulaEvaluate, unaryNegate)
+{
+    const auto formula{formula::parse("--1.6")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->compile());
+
+    ASSERT_NEAR(1.6, formula->evaluate(), 1e-6);
+}
+
+TEST(TestCompiledFormulaEvaluate, addAddadd)
+{
+    const auto formula{formula::parse("1.1+2.2+3.3")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->compile());
+
+    ASSERT_NEAR(6.6, formula->evaluate(), 1e-6);
+}
+
+TEST(TestCompiledFormulaEvaluate, mulMulMul)
+{
+    const auto formula{formula::parse("2.2*2.2*2.2")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->compile());
+
+    ASSERT_NEAR(10.648, formula->evaluate(), 1e-6);
+}
+
+TEST(TestCompiledFormulaEvaluate, addMulAdd)
+{
+    const auto formula{formula::parse("1.1+2.2*3.3+4.4")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->compile());
+
+    ASSERT_NEAR(12.76, formula->evaluate(), 1e-6);
+}

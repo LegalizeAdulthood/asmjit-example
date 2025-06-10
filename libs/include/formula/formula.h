@@ -16,6 +16,8 @@ public:
     virtual double evaluate() = 0;
 
     virtual bool assemble() = 0;
+
+    virtual bool compile() = 0;
 };
 
 std::shared_ptr<Formula> parse(std::string_view text);
