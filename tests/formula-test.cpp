@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
+
 TEST(TestFormulaParse, constant)
 {
     ASSERT_TRUE(formula::parse("1"));
@@ -153,4 +155,13 @@ TEST(TestAssembledFormulaEvaluate, two)
     ASSERT_TRUE(formula->assemble());
 
     ASSERT_EQ(2.0, formula->evaluate());
+}
+
+TEST(TestAssembledFormulaEvaluate, identifier)
+{
+    const auto formula{formula::parse("e")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->assemble());
+
+    ASSERT_NEAR(std::exp(1.0), formula->evaluate(), 1e-6);
 }

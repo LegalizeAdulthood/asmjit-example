@@ -31,7 +31,7 @@ public:
 
     virtual double evaluate(const SymbolTable &symbols) const = 0;
 
-    virtual bool assemble(asmjit::x86::Assembler &assem) const = 0;
+    virtual bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const = 0;
 };
 
 class NumberNode : public Node
@@ -48,7 +48,7 @@ public:
         return m_value;
     }
 
-    bool assemble(asmjit::x86::Assembler &assem) const override
+    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override
     {
         assem.mov(asmjit::x86::eax, m_value);
         return true;
@@ -78,9 +78,11 @@ public:
         return 0.0;
     }
 
-    bool assemble(asmjit::x86::Assembler &assem) const override
+    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override
     {
-        return false;
+        const double value{evaluate(symbols)};
+        assem.mov(asmjit::x86::eax, value);
+        return true;
     }
 
 private:
@@ -112,7 +114,7 @@ public:
         throw std::runtime_error(std::string{"Invalid unary prefix operator '"} + m_op + "'");
     }
 
-    bool assemble(asmjit::x86::Assembler &assem) const override
+    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override
     {
         return false;
     }
@@ -139,7 +141,7 @@ public:
 
     double evaluate(const SymbolTable &symbols) const override;
 
-    bool assemble(asmjit::x86::Assembler &assem) const override
+    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override
     {
         return false;
     }
@@ -247,7 +249,7 @@ bool ParsedFormula::assemble()
     asmjit::CodeHolder code;
     code.init(runtime.environment(), runtime.cpuFeatures());
     asmjit::x86::Assembler assem(&code);
-    if (!m_ast->assemble(assem))
+    if (!m_ast->assemble(assem, m_symbols))
     {
         std::cerr << "Failed to compile AST\n";
         return false;
