@@ -210,3 +210,21 @@ TEST(TestAssembledFormulaEvaluate, unaryNegate)
 
     ASSERT_NEAR(1.6, formula->evaluate(), 1e-6);
 }
+
+TEST(TestAssembledFormulaEvaluate, addAddadd)
+{
+    const auto formula{formula::parse("1.1+2.2+3.3")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->assemble());
+
+    ASSERT_NEAR(6.6, formula->evaluate(), 1e-6);
+}
+
+TEST(TestAssembledFormulaEvaluate, mulMulMul)
+{
+    const auto formula{formula::parse("2.2*2.2*2.2")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->assemble());
+
+    ASSERT_NEAR(10.648, formula->evaluate(), 1e-6);
+}
