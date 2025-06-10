@@ -228,3 +228,12 @@ TEST(TestAssembledFormulaEvaluate, mulMulMul)
 
     ASSERT_NEAR(10.648, formula->evaluate(), 1e-6);
 }
+
+TEST(TestAssembledFormulaEvaluate, addMulAdd)
+{
+    const auto formula{formula::parse("1.1+2.2*3.3+4.4")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->assemble());
+
+    ASSERT_NEAR(12.76, formula->evaluate(), 1e-6);
+}
