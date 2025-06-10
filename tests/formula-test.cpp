@@ -165,3 +165,39 @@ TEST(TestAssembledFormulaEvaluate, identifier)
 
     ASSERT_NEAR(std::exp(1.0), formula->evaluate(), 1e-6);
 }
+
+TEST(TestAssembledFormulaEvaluate, add)
+{
+    const auto formula{formula::parse("1.2+1.2")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->assemble());
+
+    ASSERT_NEAR(2.4, formula->evaluate(), 1e-6);
+}
+
+TEST(TestAssembledFormulaEvaluate, subtract)
+{
+    const auto formula{formula::parse("1.5-2.2")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->assemble());
+
+    ASSERT_NEAR(-0.7, formula->evaluate(), 1e-6);
+}
+
+TEST(TestAssembledFormulaEvaluate, multiply)
+{
+    const auto formula{formula::parse("2.2*3.1")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->assemble());
+
+    ASSERT_NEAR(6.82, formula->evaluate(), 1e-6);
+}
+
+TEST(TestAssembledFormulaEvaluate, divide)
+{
+    const auto formula{formula::parse("13.76/4.3")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->assemble());
+
+    ASSERT_NEAR(3.2, formula->evaluate(), 1e-6);
+}

@@ -141,10 +141,7 @@ public:
 
     double evaluate(const SymbolTable &symbols) const override;
 
-    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override
-    {
-        return false;
-    }
+    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override;
 
 private:
     std::shared_ptr<Node> m_left;
@@ -173,6 +170,36 @@ double BinaryOpNode::evaluate(const SymbolTable &symbols) const
         return left / right;
     }
     throw std::runtime_error(std::string{"Invalid binary operator '"} + m_op + "'");
+}
+
+bool BinaryOpNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const
+{
+    m_left->assemble(assem, symbols);
+    assem.push(asmjit::x86::eax); // Save left operand
+    m_right->assemble(assem, symbols);
+    assem.pop(asmjit::x86::ebx); // Load left operand into ebx
+    if (m_op == '+')
+    {
+        assem.add(asmjit::x86::eax, asmjit::x86::ebx); // Perform addition
+        return true;
+    }
+    if (m_op == '-')
+    {
+        assem.sub(asmjit::x86::eax, asmjit::x86::ebx); // Perform subtraction
+        return true;
+    }
+    if (m_op == '*')
+    {
+        assem.mul(asmjit::x86::eax, asmjit::x86::ebx); // Perform multiplication
+        return true;
+    }
+    if (m_op == '/')
+    {
+        assem.xor_(asmjit::x86::edx, asmjit::x86::edx); // Clear edx for division
+        assem.div(asmjit::x86::ebx); // Perform division
+        return true;
+    }
+    return false;
 }
 
 const auto make_binary_op = [](auto &ctx)
