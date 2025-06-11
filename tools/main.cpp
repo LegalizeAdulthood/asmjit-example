@@ -1,6 +1,7 @@
 #include <formula/formula.h>
 
 #include <iostream>
+#include <map>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -12,19 +13,26 @@ int main(const std::vector<std::string_view> &args)
 {
     bool assemble{};
     bool compile{};
-    if (args.size() == 2)
+    std::map<std::string, double> values;
+    for (size_t i = 1; i < args.size(); ++i)
     {
-        if (args[1] == "--assemble")
+        if (!compile && args[i] == "--assemble")
         {
             assemble = true;
         }
-        else if (args[1] == "--compile")
+        else if (!assemble && args[i] == "--compile")
         {
             compile = true;
         }
+        else if (auto pos = args[i].find('='); pos != std::string_view::npos)
+        {
+            std::string name{args[i].substr(0, pos)};
+            std::string value{args[i].substr(pos + 1)};
+            values[name] = std::stod(value);
+        }
         else
         {
-            std::cerr << "Usage: " << args[0] << " [--assemble | --compile]\n";
+            std::cerr << "Usage: " << args[0] << " [--assemble | --compile] [name=value] ... [name=value]\n";
             return 1;
         }
     }
@@ -37,6 +45,10 @@ int main(const std::vector<std::string_view> &args)
     {
         std::cerr << "Error: Invalid formula\n";
         return 1;
+    }
+    for (const auto &[name, value] : values)
+    {
+        formula->set_value(name, value);
     }
 
     if (assemble && !formula->assemble())

@@ -160,6 +160,16 @@ TEST(TestFormulaEvaluate, twoPi)
     ASSERT_NEAR(6.28318, formula->evaluate(), 1e-5);
 }
 
+TEST(TestFormulaEvaluate, setSymbolValue)
+{
+    const auto formula{formula::parse("a*a + b*b")};
+    ASSERT_TRUE(formula);
+    formula->set_value("a", 2.0);
+    formula->set_value("b", 3.0);
+
+    ASSERT_NEAR(13.0, formula->evaluate(), 1e-5);
+}
+
 TEST(TestAssembledFormulaEvaluate, one)
 {
     const auto formula{formula::parse("1")};

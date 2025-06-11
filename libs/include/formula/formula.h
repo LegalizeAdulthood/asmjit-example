@@ -13,10 +13,10 @@ class Formula
 public:
     virtual ~Formula() = default;
 
+    virtual void set_value(std::string_view name, double value) = 0;
+
     virtual double evaluate() = 0;
-
     virtual bool assemble() = 0;
-
     virtual bool compile() = 0;
 };
 

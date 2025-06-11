@@ -358,6 +358,11 @@ public:
     }
     ~ParsedFormula() override = default;
 
+    void set_value(std::string_view name, double value) override
+    {
+        m_symbols[std::string{name}] = value;
+    }
+
     double evaluate() override;
     bool assemble() override;
     bool compile() override;
