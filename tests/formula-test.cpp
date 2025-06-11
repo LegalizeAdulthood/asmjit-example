@@ -160,6 +160,14 @@ TEST(TestFormulaEvaluate, twoPi)
     ASSERT_NEAR(6.28318, formula->evaluate(), 1e-5);
 }
 
+TEST(TestFormulaEvaluate, unknownIdentifierIsZero)
+{
+    const auto formula{formula::parse("a")};
+    ASSERT_TRUE(formula);
+
+    ASSERT_EQ(0.0, formula->evaluate());
+}
+
 TEST(TestFormulaEvaluate, setSymbolValue)
 {
     const auto formula{formula::parse("a*a + b*b")};
@@ -195,6 +203,15 @@ TEST(TestAssembledFormulaEvaluate, identifier)
     ASSERT_TRUE(formula->assemble());
 
     ASSERT_NEAR(std::exp(1.0), formula->evaluate(), 1e-6);
+}
+
+TEST(TestAssembledFormulaEvaluate, unknownIdentifierIsZero)
+{
+    const auto formula{formula::parse("a")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->assemble());
+
+    ASSERT_EQ(0.0, formula->evaluate());
 }
 
 TEST(TestAssembledFormulaEvaluate, add)
@@ -303,6 +320,15 @@ TEST(TestCompiledFormulaEvaluate, identifier)
     ASSERT_TRUE(formula->compile());
 
     ASSERT_NEAR(std::exp(1.0), formula->evaluate(), 1e-6);
+}
+
+TEST(TestCompiledFormulaEvaluate, unknownIdentifierIsZero)
+{
+    const auto formula{formula::parse("a")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->compile());
+
+    ASSERT_EQ(0.0, formula->evaluate());
 }
 
 TEST(TestCompiledFormulaEvaluate, add)
