@@ -366,7 +366,7 @@ private:
     SymbolTable m_symbols;
     std::shared_ptr<Node> m_ast;
     Function *m_function{};
-    asmjit::JitRuntime runtime;
+    asmjit::JitRuntime m_runtime;
 };
 
 double ParsedFormula::evaluate()
@@ -377,7 +377,7 @@ double ParsedFormula::evaluate()
 bool ParsedFormula::assemble()
 {
     asmjit::CodeHolder code;
-    code.init(runtime.environment(), runtime.cpuFeatures());
+    code.init(m_runtime.environment(), m_runtime.cpuFeatures());
     asmjit::FileLogger logger(stdout);
     code.setLogger(&logger);
     asmjit::x86::Assembler assem(&code);
@@ -388,7 +388,7 @@ bool ParsedFormula::assemble()
     }
     assem.ret();
 
-    if (const asmjit::Error err = runtime.add(&m_function, &code); err || !m_function)
+    if (const asmjit::Error err = m_runtime.add(&m_function, &code); err || !m_function)
     {
         std::cerr << "Failed to compile formula: " << asmjit::DebugUtils::errorAsString(err) << '\n';
         return false;
@@ -400,7 +400,7 @@ bool ParsedFormula::assemble()
 bool ParsedFormula::compile()
 {
     asmjit::CodeHolder code;
-    code.init(runtime.environment(), runtime.cpuFeatures());
+    code.init(m_runtime.environment(), m_runtime.cpuFeatures());
     asmjit::FileLogger logger(stdout);
     code.setLogger(&logger);
     asmjit::x86::Compiler comp(&code);
@@ -413,7 +413,7 @@ bool ParsedFormula::compile()
     comp.endFunc();
     comp.finalize();
 
-    if (const asmjit::Error err = runtime.add(&m_function, &code); err || !m_function)
+    if (const asmjit::Error err = m_runtime.add(&m_function, &code); err || !m_function)
     {
         std::cerr << "Failed to compile formula: " << asmjit::DebugUtils::errorAsString(err) << '\n';
         return false;
