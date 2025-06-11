@@ -44,27 +44,32 @@ public:
     }
     ~NumberNode() override = default;
 
-    double evaluate(const SymbolTable & /*symbols*/) const override
-    {
-        return m_value;
-    }
-
-    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override
-    {
-        assem.mov(asmjit::x86::rax, m_value);
-        assem.movq(asmjit::x86::xmm0, asmjit::x86::rax);
-        return true;
-    }
-
-    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override
-    {
-        comp.mov(asmjit::x86::rax, m_value);
-        return true;
-    }
+    double evaluate(const SymbolTable & /*symbols*/) const override;
+    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override;
+    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override;
 
 private:
     double m_value{};
 };
+
+double NumberNode::evaluate(const SymbolTable &) const
+{
+    return m_value;
+}
+
+bool NumberNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const
+{
+    assem.mov(asmjit::x86::rax, m_value);
+    assem.movq(asmjit::x86::xmm0, asmjit::x86::rax);
+    return true;
+}
+
+bool NumberNode::compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const
+{
+    comp.mov(asmjit::x86::rax, m_value);
+    comp.movq(asmjit::x86::xmm0, asmjit::x86::rax);
+    return true;
+}
 
 const auto make_number = [](auto &ctx) { return std::make_shared<NumberNode>(bp::_attr(ctx)); };
 
@@ -77,34 +82,38 @@ public:
     }
     ~IdentifierNode() override = default;
 
-    double evaluate(const SymbolTable &symbols) const override
-    {
-        if (const auto &it = symbols.find(m_value); it != symbols.end())
-        {
-            return it->second;
-        }
-        return 0.0;
-    }
-
-    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override
-    {
-        const double value{evaluate(symbols)};
-        assem.mov(asmjit::x86::rax, value);
-        assem.movq(asmjit::x86::xmm0, asmjit::x86::rax);
-        return true;
-    }
-
-    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override
-    {
-        const double value{evaluate(map)};
-        comp.mov(asmjit::x86::rax, value);
-        comp.movq(asmjit::x86::xmm0, asmjit::x86::rax);
-        return true;
-    }
+    double evaluate(const SymbolTable &symbols) const override;
+    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override;
+    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override;
 
 private:
     std::string m_value;
 };
+
+double IdentifierNode::evaluate(const SymbolTable &symbols) const
+{
+    if (const auto &it = symbols.find(m_value); it != symbols.end())
+    {
+        return it->second;
+    }
+    return 0.0;
+}
+
+bool IdentifierNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const
+{
+    const double value{evaluate(symbols)};
+    assem.mov(asmjit::x86::rax, value);
+    assem.movq(asmjit::x86::xmm0, asmjit::x86::rax);
+    return true;
+}
+
+bool IdentifierNode::compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const
+{
+    const double value{evaluate(map)};
+    comp.mov(asmjit::x86::rax, value);
+    comp.movq(asmjit::x86::xmm0, asmjit::x86::rax);
+    return true;
+}
 
 const auto make_identifier = [](auto &ctx) { return std::make_shared<IdentifierNode>(bp::_attr(ctx)); };
 
@@ -118,63 +127,69 @@ public:
     }
     ~UnaryOpNode() override = default;
 
-    double evaluate(const SymbolTable &symbols) const override
-    {
-        if (m_op == '+')
-        {
-            return m_operand->evaluate(symbols);
-        }
-        if (m_op == '-')
-        {
-            return -m_operand->evaluate(symbols);
-        }
-        throw std::runtime_error(std::string{"Invalid unary prefix operator '"} + m_op + "'");
-    }
-
-    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override
-    {
-        if (m_op == '+')
-        {
-            return m_operand->assemble(assem, symbols);
-        }
-        if (m_op == '-')
-        {
-            if (!m_operand->assemble(assem, symbols))
-            {
-                return false;
-            }
-            assem.xorpd(asmjit::x86::xmm1, asmjit::x86::xmm1);
-            assem.subsd(asmjit::x86::xmm1, asmjit::x86::xmm0);
-            assem.movsd(asmjit::x86::xmm0, asmjit::x86::xmm1);
-            return true;
-        }
-
-        return false;
-    }
-
-    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override
-    {
-        if (m_op == '+')
-        {
-            return m_operand->compile(comp, map);
-        }
-        if (m_op == '-')
-        {
-            if (!m_operand->compile(comp, map))
-            {
-                return false;
-            }
-            comp.neg(asmjit::x86::rax); // Negate the value in rax
-            return true;
-        }
-
-        return false;
-    }
+    double evaluate(const SymbolTable &symbols) const override;
+    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override;
+    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override;
 
 private:
     char m_op;
     std::shared_ptr<Node> m_operand;
 };
+
+double UnaryOpNode::evaluate(const SymbolTable &symbols) const
+{
+    if (m_op == '+')
+    {
+        return m_operand->evaluate(symbols);
+    }
+    if (m_op == '-')
+    {
+        return -m_operand->evaluate(symbols);
+    }
+    throw std::runtime_error(std::string{"Invalid unary prefix operator '"} + m_op + "'");
+}
+
+bool UnaryOpNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const
+{
+    if (m_op == '+')
+    {
+        return m_operand->assemble(assem, symbols);
+    }
+    if (m_op == '-')
+    {
+        if (!m_operand->assemble(assem, symbols))
+        {
+            return false;
+        }
+        assem.xorpd(asmjit::x86::xmm1, asmjit::x86::xmm1);
+        assem.subsd(asmjit::x86::xmm1, asmjit::x86::xmm0);
+        assem.movsd(asmjit::x86::xmm0, asmjit::x86::xmm1);
+        return true;
+    }
+
+    return false;
+}
+
+bool UnaryOpNode::compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const
+{
+    if (m_op == '+')
+    {
+        return m_operand->compile(comp, map);
+    }
+    if (m_op == '-')
+    {
+        if (!m_operand->compile(comp, map))
+        {
+            return false;
+        }
+        comp.xorpd(asmjit::x86::xmm1, asmjit::x86::xmm1); // xmm1 = 0.0
+        comp.subsd(asmjit::x86::xmm1, asmjit::x86::xmm0); // xmm1 = 0.0 - xmm0
+        comp.movsd(asmjit::x86::xmm0, asmjit::x86::xmm1); // xmm0 = xmm1
+        return true;
+    }
+
+    return false;
+}
 
 const auto make_unary_op = [](auto &ctx)
 { return std::make_shared<UnaryOpNode>(std::get<0>(bp::_attr(ctx)), std::get<1>(bp::_attr(ctx))); };
@@ -192,9 +207,7 @@ public:
     ~BinaryOpNode() override = default;
 
     double evaluate(const SymbolTable &symbols) const override;
-
     bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override;
-
     bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override;
 
 private:
@@ -261,27 +274,30 @@ bool BinaryOpNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &sy
 bool BinaryOpNode::compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const
 {
     m_left->compile(comp, map);
-    comp.push(asmjit::x86::rax); // Save left operand
+    comp.movq(asmjit::x86::rax, asmjit::x86::xmm0); // rax = xmm0[0]
+    comp.push(asmjit::x86::rax);                    // Push left operand onto stack
     m_right->compile(comp, map);
-    comp.pop(asmjit::x86::rbx); // Load left operand into rbx
+    comp.movq(asmjit::x86::xmm1, asmjit::x86::xmm0); // xmm1 = xmm0 (right operand)
+    comp.pop(asmjit::x86::rax);                      // Load left operand into rax
+    comp.movq(asmjit::x86::xmm0, asmjit::x86::rax);  // xmm0 = rax (left operand)
     if (m_op == '+')
     {
-        comp.add(asmjit::x86::rax, asmjit::x86::rbx);
+        comp.addsd(asmjit::x86::xmm0, asmjit::x86::xmm1); // xmm0 = xmm0 + xmm1
         return true;
     }
     if (m_op == '-')
     {
-        comp.sub(asmjit::x86::rax, asmjit::x86::rbx);
+        comp.subsd(asmjit::x86::xmm0, asmjit::x86::xmm1); // xmm0 = xmm0 - xmm1
         return true;
     }
     if (m_op == '*')
     {
-        comp.mul(asmjit::x86::rax, asmjit::x86::rbx);
+        comp.mulsd(asmjit::x86::xmm0, asmjit::x86::xmm1); // xmm0 = xmm0 * xmm1
         return true;
     }
     if (m_op == '/')
     {
-        comp.div(asmjit::x86::rbx, asmjit::x86::rax);
+        comp.divsd(asmjit::x86::xmm0, asmjit::x86::xmm1); // xmm0 = xmm0 / xmm1
         return true;
     }
     return false;
@@ -383,9 +399,10 @@ bool ParsedFormula::assemble()
 
 bool ParsedFormula::compile()
 {
-    asmjit::JitRuntime runtime;
     asmjit::CodeHolder code;
     code.init(runtime.environment(), runtime.cpuFeatures());
+    asmjit::FileLogger logger(stdout);
+    code.setLogger(&logger);
     asmjit::x86::Compiler comp(&code);
     comp.addFunc(asmjit::FuncSignature::build<double>());
     if (!m_ast->compile(comp, m_symbols))
@@ -396,7 +413,7 @@ bool ParsedFormula::compile()
     comp.endFunc();
     comp.finalize();
 
-    if (const asmjit::Error err = runtime.add(&m_function, &code))
+    if (const asmjit::Error err = runtime.add(&m_function, &code); err || !m_function)
     {
         std::cerr << "Failed to compile formula: " << asmjit::DebugUtils::errorAsString(err) << '\n';
         return false;
