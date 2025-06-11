@@ -322,7 +322,7 @@ const auto make_binary_op_seq = [](auto &ctx)
 using Expr = std::shared_ptr<Node>;
 
 // Terminal parsers
-//const auto number = bp::double_;
+// const auto number = bp::double_;
 const auto alpha = bp::char_('a', 'z');
 const auto digit = bp::char_('0', '9');
 const auto alnum = alpha | digit;
@@ -363,10 +363,13 @@ public:
     bool compile() override;
 
 private:
+    void init_code_holder(asmjit::CodeHolder &code);
+
     SymbolTable m_symbols;
     std::shared_ptr<Node> m_ast;
     Function *m_function{};
     asmjit::JitRuntime m_runtime;
+    asmjit::FileLogger m_logger{stdout};
 };
 
 double ParsedFormula::evaluate()
@@ -374,12 +377,16 @@ double ParsedFormula::evaluate()
     return m_function ? m_function() : m_ast->evaluate(m_symbols);
 }
 
+void ParsedFormula::init_code_holder(asmjit::CodeHolder &code)
+{
+    code.init(m_runtime.environment(), m_runtime.cpuFeatures());
+    code.setLogger(&m_logger);
+}
+
 bool ParsedFormula::assemble()
 {
     asmjit::CodeHolder code;
-    code.init(m_runtime.environment(), m_runtime.cpuFeatures());
-    asmjit::FileLogger logger(stdout);
-    code.setLogger(&logger);
+    init_code_holder(code);
     asmjit::x86::Assembler assem(&code);
     if (!m_ast->assemble(assem, m_symbols))
     {
@@ -400,9 +407,7 @@ bool ParsedFormula::assemble()
 bool ParsedFormula::compile()
 {
     asmjit::CodeHolder code;
-    code.init(m_runtime.environment(), m_runtime.cpuFeatures());
-    asmjit::FileLogger logger(stdout);
-    code.setLogger(&logger);
+    init_code_holder(code);
     asmjit::x86::Compiler comp(&code);
     comp.addFunc(asmjit::FuncSignature::build<double>());
     if (!m_ast->compile(comp, m_symbols))
@@ -430,7 +435,7 @@ std::shared_ptr<Formula> parse(std::string_view text)
 
     try
     {
-        if (auto success = bp::parse(text, expr, bp::ws, ast/*, bp::trace::on*/); success && ast)
+        if (auto success = bp::parse(text, expr, bp::ws, ast /*, bp::trace::on*/); success && ast)
         {
             return std::make_shared<ParsedFormula>(ast);
         }
