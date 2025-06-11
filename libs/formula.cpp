@@ -40,7 +40,8 @@ struct EmitterState
     DataSection data;
 };
 
-asmjit::Label get_constant_label(asmjit::x86::Assembler &assem, ConstantLabels &labels, double value)
+template <typename Emitter>
+asmjit::Label get_constant_label(Emitter &emitter, ConstantLabels &labels, double value)
 {
     if (const auto it = labels.find(value); it != labels.end())
     {
@@ -48,12 +49,13 @@ asmjit::Label get_constant_label(asmjit::x86::Assembler &assem, ConstantLabels &
     }
 
     // Create a new label for the constant
-    asmjit::Label label = assem.newLabel();
+    asmjit::Label label = emitter.newLabel();
     labels[value] = label;
     return label;
 }
 
-asmjit::Label get_symbol_label(asmjit::x86::Assembler &assem, SymbolLabels &labels, std::string name)
+template <typename Emitter>
+asmjit::Label get_symbol_label(Emitter &emitter, SymbolLabels &labels, std::string name)
 {
     if (const auto it = labels.find(name); it != labels.end())
     {
@@ -61,30 +63,31 @@ asmjit::Label get_symbol_label(asmjit::x86::Assembler &assem, SymbolLabels &labe
     }
 
     // Create a new label for the symbol
-    asmjit::Label label = assem.newNamedLabel(name.c_str());
+    asmjit::Label label = emitter.newNamedLabel(name.c_str());
     labels[name] = label;
     return label;
 }
 
-void emit_data_section(asmjit::x86::Assembler &assem, const SymbolTable &symbols, DataSection &constants)
+template <typename Emitter>
+void emit_data_section(Emitter &emitter, EmitterState &state)
 {
-    assem.section(constants.data);
-    for (const auto &[name, label] : constants.symbols)
+    emitter.section(state.data.data);
+    for (const auto &[name, label] : state.data.symbols)
     {
-        assem.bind(label);
-        if (const auto it = symbols.find(name); it != symbols.end())
+        emitter.bind(label);
+        if (const auto it = state.symbols.find(name); it != state.symbols.end())
         {
-            assem.embedDouble(it->second); // Embed the symbol value in the data section
+            emitter.embedDouble(it->second); // Embed the symbol value in the data section
         }
         else
         {
             throw std::runtime_error("Symbol not found: " + name);
         }
     }
-    for (const auto &[value, label] : constants.constants)
+    for (const auto &[value, label] : state.data.constants)
     {
-        assem.bind(label);
-        assem.embedDouble(value); // Embed the double value in the data section
+        emitter.bind(label);
+        emitter.embedDouble(value); // Embed the double value in the data section
     }
 }
 
@@ -129,9 +132,8 @@ bool NumberNode::assemble(asmjit::x86::Assembler &assem, EmitterState &state) co
 
 bool NumberNode::compile(asmjit::x86::Compiler &comp, EmitterState &state, asmjit::x86::Xmm result) const
 {
-    asmjit::x86::Gp tmp = comp.newGpq();
-    comp.mov(tmp, m_value);
-    comp.movq(result, tmp);
+    asmjit::Label label = get_constant_label(comp, state.data.constants, m_value);
+    comp.movq(result, asmjit::x86::ptr(label));
     return true;
 }
 
@@ -163,27 +165,27 @@ double IdentifierNode::evaluate(const SymbolTable &symbols) const
     return 0.0;
 }
 
+template <typename Emitter>
+asmjit::Label get_identifier_label(Emitter &assem, EmitterState &state, const std::string &name)
+{
+    if (const auto &it = state.symbols.find(name); it != state.symbols.end())
+    {
+        return get_symbol_label(assem, state.data.symbols, it->first);
+    }
+    return get_constant_label(assem, state.data.constants, 0.0);
+}
+
 bool IdentifierNode::assemble(asmjit::x86::Assembler &assem, EmitterState &state) const
 {
-    asmjit::Label label;
-    if (const auto &it = state.symbols.find(m_name); it != state.symbols.end())
-    {
-        label = get_symbol_label(assem, state.data.symbols, it->first);
-    }
-    else
-    {
-        label = get_constant_label(assem, state.data.constants, 0.0);
-    }
+    asmjit::Label label{get_identifier_label(assem, state, m_name)};
     assem.movq(asmjit::x86::xmm0, asmjit::x86::ptr(label));
     return true;
 }
 
 bool IdentifierNode::compile(asmjit::x86::Compiler &comp, EmitterState &state, asmjit::x86::Xmm result) const
 {
-    const double value{evaluate(state.symbols)};
-    asmjit::x86::Gp tmp = comp.newGpq();
-    comp.mov(tmp, value);
-    comp.movq(result, tmp);
+    asmjit::Label label{get_identifier_label(comp, state, m_name)};
+    comp.movq(result, asmjit::x86::ptr(label));
     return true;
 }
 
@@ -347,28 +349,27 @@ bool BinaryOpNode::assemble(asmjit::x86::Assembler &assem, EmitterState &state) 
 
 bool BinaryOpNode::compile(asmjit::x86::Compiler &comp, EmitterState &state, asmjit::x86::Xmm result) const
 {
-    asmjit::x86::Xmm left{result};
-    m_left->compile(comp, state, left);
+    m_left->compile(comp, state, result);
     asmjit::x86::Xmm right{comp.newXmm()};
     m_right->compile(comp, state, right);
     if (m_op == '+')
     {
-        comp.addsd(left, right);
+        comp.addsd(result, right);
         return true;
     }
     if (m_op == '-')
     {
-        comp.subsd(left, right); // xmm0 = xmm0 - xmm1
+        comp.subsd(result, right); // xmm0 = xmm0 - xmm1
         return true;
     }
     if (m_op == '*')
     {
-        comp.mulsd(left, right); // xmm0 = xmm0 * xmm1
+        comp.mulsd(result, right); // xmm0 = xmm0 * xmm1
         return true;
     }
     if (m_op == '/')
     {
-        comp.divsd(left, right); // xmm0 = xmm0 / xmm1
+        comp.divsd(result, right); // xmm0 = xmm0 / xmm1
         return true;
     }
     return false;
@@ -479,7 +480,7 @@ bool ParsedFormula::assemble()
         return false;
     }
     assem.ret();
-    emit_data_section(assem, m_state.symbols, m_state.data);
+    emit_data_section(assem, m_state);
 
     if (const asmjit::Error err = m_runtime.add(&m_function, &code); err || !m_function)
     {
@@ -507,6 +508,7 @@ bool ParsedFormula::compile()
     }
     comp.ret(result);
     comp.endFunc();
+    emit_data_section(comp, m_state);
     comp.finalize();
 
     if (const asmjit::Error err = m_runtime.add(&m_function, &code); err || !m_function)
