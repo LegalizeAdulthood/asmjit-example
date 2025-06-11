@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstdio>
 #include <functional>
 #include <iostream>
 #include <map>
@@ -50,13 +51,14 @@ public:
 
     bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override
     {
-        assem.mov(asmjit::x86::eax, m_value);
+        assem.mov(asmjit::x86::rax, m_value);
+        assem.movq(asmjit::x86::xmm0, asmjit::x86::rax);
         return true;
     }
 
     bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override
     {
-        comp.mov(asmjit::x86::eax, m_value);
+        comp.mov(asmjit::x86::rax, m_value);
         return true;
     }
 
@@ -87,14 +89,16 @@ public:
     bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override
     {
         const double value{evaluate(symbols)};
-        assem.mov(asmjit::x86::eax, value);
+        assem.mov(asmjit::x86::rax, value);
+        assem.movq(asmjit::x86::xmm0, asmjit::x86::rax);
         return true;
     }
 
     bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override
     {
         const double value{evaluate(map)};
-        comp.mov(asmjit::x86::eax, value);
+        comp.mov(asmjit::x86::rax, value);
+        comp.movq(asmjit::x86::xmm0, asmjit::x86::rax);
         return true;
     }
 
@@ -139,7 +143,9 @@ public:
             {
                 return false;
             }
-            assem.neg(asmjit::x86::eax); // Negate the value in eax
+            assem.xorpd(asmjit::x86::xmm1, asmjit::x86::xmm1);
+            assem.subsd(asmjit::x86::xmm1, asmjit::x86::xmm0);
+            assem.movsd(asmjit::x86::xmm0, asmjit::x86::xmm1);
             return true;
         }
 
@@ -158,7 +164,7 @@ public:
             {
                 return false;
             }
-            comp.neg(asmjit::x86::eax); // Negate the value in eax
+            comp.neg(asmjit::x86::rax); // Negate the value in rax
             return true;
         }
 
@@ -223,28 +229,30 @@ double BinaryOpNode::evaluate(const SymbolTable &symbols) const
 bool BinaryOpNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const
 {
     m_left->assemble(assem, symbols);
-    assem.push(asmjit::x86::eax); // Save left operand
+    assem.movq(asmjit::x86::rax, asmjit::x86::xmm0); // Save left operand
+    assem.push(asmjit::x86::rax);                    // Push left operand onto stack
     m_right->assemble(assem, symbols);
-    assem.pop(asmjit::x86::ebx); // Load left operand into ebx
+    assem.movq(asmjit::x86::xmm1, asmjit::x86::xmm0); // Move right operand to xmm1
+    assem.pop(asmjit::x86::rax);                      // Load left operand into rax
+    assem.movq(asmjit::x86::xmm0, asmjit::x86::rax);  // Move left operand to xmm0
     if (m_op == '+')
     {
-        assem.add(asmjit::x86::eax, asmjit::x86::ebx); // Perform addition
+        assem.addsd(asmjit::x86::xmm0, asmjit::x86::xmm1); // xmm0 = xmm0 + xmm1
         return true;
     }
     if (m_op == '-')
     {
-        assem.sub(asmjit::x86::eax, asmjit::x86::ebx); // Perform subtraction
+        assem.subsd(asmjit::x86::xmm0, asmjit::x86::xmm1); // xmm0 = xmm0 - xmm1
         return true;
     }
     if (m_op == '*')
     {
-        assem.mul(asmjit::x86::eax, asmjit::x86::ebx); // Perform multiplication
+        assem.mulsd(asmjit::x86::xmm0, asmjit::x86::xmm1); // xmm0 = xmm0 * xmm1
         return true;
     }
     if (m_op == '/')
     {
-        assem.xor_(asmjit::x86::edx, asmjit::x86::edx); // Clear edx for division
-        assem.div(asmjit::x86::ebx);                    // Perform division
+        assem.divsd(asmjit::x86::xmm0, asmjit::x86::xmm1); // xmm0 = xmm0 / xmm1
         return true;
     }
     return false;
@@ -253,27 +261,27 @@ bool BinaryOpNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &sy
 bool BinaryOpNode::compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const
 {
     m_left->compile(comp, map);
-    comp.push(asmjit::x86::eax); // Save left operand
+    comp.push(asmjit::x86::rax); // Save left operand
     m_right->compile(comp, map);
-    comp.pop(asmjit::x86::ebx); // Load left operand into ebx
+    comp.pop(asmjit::x86::rbx); // Load left operand into rbx
     if (m_op == '+')
     {
-        comp.add(asmjit::x86::eax, asmjit::x86::ebx);
+        comp.add(asmjit::x86::rax, asmjit::x86::rbx);
         return true;
     }
     if (m_op == '-')
     {
-        comp.sub(asmjit::x86::eax, asmjit::x86::ebx);
+        comp.sub(asmjit::x86::rax, asmjit::x86::rbx);
         return true;
     }
     if (m_op == '*')
     {
-        comp.mul(asmjit::x86::eax, asmjit::x86::ebx);
+        comp.mul(asmjit::x86::rax, asmjit::x86::rbx);
         return true;
     }
     if (m_op == '/')
     {
-        comp.div(asmjit::x86::ebx, asmjit::x86::eax);
+        comp.div(asmjit::x86::rbx, asmjit::x86::rax);
         return true;
     }
     return false;
@@ -321,6 +329,8 @@ const auto expr_def = (term >> *(bp::char_("+-") >> term))[make_binary_op_seq];
 
 BOOST_PARSER_DEFINE_RULES(number, variable, expr, term, factor, unary_op);
 
+using Function = double();
+
 class ParsedFormula : public Formula
 {
 public:
@@ -339,19 +349,21 @@ public:
 private:
     SymbolTable m_symbols;
     std::shared_ptr<Node> m_ast;
-    std::function<double(const SymbolTable &)> m_function;
+    Function *m_function{};
+    asmjit::JitRuntime runtime;
 };
 
 double ParsedFormula::evaluate()
 {
-    return m_function ? m_function(m_symbols) : m_ast->evaluate(m_symbols);
+    return m_function ? m_function() : m_ast->evaluate(m_symbols);
 }
 
 bool ParsedFormula::assemble()
 {
-    asmjit::JitRuntime runtime;
     asmjit::CodeHolder code;
     code.init(runtime.environment(), runtime.cpuFeatures());
+    asmjit::FileLogger logger(stdout);
+    code.setLogger(&logger);
     asmjit::x86::Assembler assem(&code);
     if (!m_ast->assemble(assem, m_symbols))
     {
@@ -360,7 +372,7 @@ bool ParsedFormula::assemble()
     }
     assem.ret();
 
-    if (const asmjit::Error err = runtime.add(&m_function, &code))
+    if (const asmjit::Error err = runtime.add(&m_function, &code); err || !m_function)
     {
         std::cerr << "Failed to compile formula: " << asmjit::DebugUtils::errorAsString(err) << '\n';
         return false;
