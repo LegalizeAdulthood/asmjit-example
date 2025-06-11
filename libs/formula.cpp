@@ -32,7 +32,7 @@ public:
 
     virtual double evaluate(const SymbolTable &symbols) const = 0;
     virtual bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const = 0;
-    virtual bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const = 0;
+    virtual bool compile( asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result ) const = 0;
 };
 
 class NumberNode : public Node
@@ -46,7 +46,7 @@ public:
 
     double evaluate(const SymbolTable & /*symbols*/) const override;
     bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override;
-    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override;
+    bool compile( asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result ) const override;
 
 private:
     double m_value{};
@@ -64,10 +64,11 @@ bool NumberNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &symb
     return true;
 }
 
-bool NumberNode::compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const
+bool NumberNode::compile(asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result) const
 {
-    comp.mov(asmjit::x86::rax, m_value);
-    comp.movq(asmjit::x86::xmm0, asmjit::x86::rax);
+    asmjit::x86::Gp tmp = comp.newGpq();
+    comp.mov(tmp, m_value);
+    comp.movq(result, tmp);
     return true;
 }
 
@@ -84,7 +85,7 @@ public:
 
     double evaluate(const SymbolTable &symbols) const override;
     bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override;
-    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override;
+    bool compile( asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result ) const override;
 
 private:
     std::string m_value;
@@ -107,11 +108,12 @@ bool IdentifierNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &
     return true;
 }
 
-bool IdentifierNode::compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const
+bool IdentifierNode::compile( asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result ) const
 {
     const double value{evaluate(map)};
-    comp.mov(asmjit::x86::rax, value);
-    comp.movq(asmjit::x86::xmm0, asmjit::x86::rax);
+    asmjit::x86::Gp tmp = comp.newGpq();
+    comp.mov(tmp, value);
+    comp.movq(result, tmp);
     return true;
 }
 
@@ -129,7 +131,7 @@ public:
 
     double evaluate(const SymbolTable &symbols) const override;
     bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override;
-    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override;
+    bool compile( asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result ) const override;
 
 private:
     char m_op;
@@ -170,21 +172,23 @@ bool UnaryOpNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &sym
     return false;
 }
 
-bool UnaryOpNode::compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const
+bool UnaryOpNode::compile( asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result ) const
 {
     if (m_op == '+')
     {
-        return m_operand->compile(comp, map);
+        return m_operand->compile(comp, map, result);
     }
     if (m_op == '-')
     {
-        if (!m_operand->compile(comp, map))
+        asmjit::x86::Xmm operand{comp.newXmm()};
+        if (!m_operand->compile(comp, map, operand))
         {
             return false;
         }
-        comp.xorpd(asmjit::x86::xmm1, asmjit::x86::xmm1); // xmm1 = 0.0
-        comp.subsd(asmjit::x86::xmm1, asmjit::x86::xmm0); // xmm1 = 0.0 - xmm0
-        comp.movsd(asmjit::x86::xmm0, asmjit::x86::xmm1); // xmm0 = xmm1
+        asmjit::x86::Xmm tmp = comp.newXmm();
+        comp.xorpd(tmp, tmp); // xmm1 = 0.0
+        comp.subsd(tmp, operand); // xmm1 = 0.0 - xmm0
+        comp.movsd(result, tmp); // xmm0 = xmm1
         return true;
     }
 
@@ -208,7 +212,7 @@ public:
 
     double evaluate(const SymbolTable &symbols) const override;
     bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols) const override;
-    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const override;
+    bool compile( asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result ) const override;
 
 private:
     std::shared_ptr<Node> m_left;
@@ -271,33 +275,30 @@ bool BinaryOpNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &sy
     return false;
 }
 
-bool BinaryOpNode::compile(asmjit::x86::Compiler &comp, const SymbolTable &map) const
+bool BinaryOpNode::compile( asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result ) const
 {
-    m_left->compile(comp, map);
-    comp.movq(asmjit::x86::rax, asmjit::x86::xmm0); // rax = xmm0[0]
-    comp.push(asmjit::x86::rax);                    // Push left operand onto stack
-    m_right->compile(comp, map);
-    comp.movq(asmjit::x86::xmm1, asmjit::x86::xmm0); // xmm1 = xmm0 (right operand)
-    comp.pop(asmjit::x86::rax);                      // Load left operand into rax
-    comp.movq(asmjit::x86::xmm0, asmjit::x86::rax);  // xmm0 = rax (left operand)
+    asmjit::x86::Xmm left{result};
+    m_left->compile(comp, map, left);
+    asmjit::x86::Xmm right{comp.newXmm()};
+    m_right->compile(comp, map, right);
     if (m_op == '+')
     {
-        comp.addsd(asmjit::x86::xmm0, asmjit::x86::xmm1); // xmm0 = xmm0 + xmm1
+        comp.addsd(left, right);
         return true;
     }
     if (m_op == '-')
     {
-        comp.subsd(asmjit::x86::xmm0, asmjit::x86::xmm1); // xmm0 = xmm0 - xmm1
+        comp.subsd(left, right); // xmm0 = xmm0 - xmm1
         return true;
     }
     if (m_op == '*')
     {
-        comp.mulsd(asmjit::x86::xmm0, asmjit::x86::xmm1); // xmm0 = xmm0 * xmm1
+        comp.mulsd(left, right); // xmm0 = xmm0 * xmm1
         return true;
     }
     if (m_op == '/')
     {
-        comp.divsd(asmjit::x86::xmm0, asmjit::x86::xmm1); // xmm0 = xmm0 / xmm1
+        comp.divsd(left, right); // xmm0 = xmm0 / xmm1
         return true;
     }
     return false;
@@ -409,11 +410,13 @@ bool ParsedFormula::compile()
     init_code_holder(code);
     asmjit::x86::Compiler comp(&code);
     comp.addFunc(asmjit::FuncSignature::build<double>());
-    if (!m_ast->compile(comp, m_symbols))
+    asmjit::x86::Xmm result = comp.newXmmSd();
+    if (!m_ast->compile(comp, m_symbols, result))
     {
         std::cerr << "Failed to compile AST\n";
         return false;
     }
+    comp.ret(result);
     comp.endFunc();
     comp.finalize();
 
