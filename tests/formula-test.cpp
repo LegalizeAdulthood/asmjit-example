@@ -69,6 +69,27 @@ TEST(TestFormulaParse, addAddAdd)
     ASSERT_TRUE(formula::parse("1+1+1"));
 }
 
+TEST(TestFormulaParse, capitalLetterInIdentifier)
+{
+    ASSERT_TRUE(formula::parse("A"));
+}
+
+TEST(TestFormulaParse, numberInIdentifier)
+{
+    ASSERT_TRUE(formula::parse("a1"));
+}
+
+TEST(TestFormulaParse, underscoreInIdentifier)
+{
+    ASSERT_TRUE(formula::parse("A_1"));
+}
+
+TEST(TestFormulaParse, invalidIdentifier)
+{
+    EXPECT_FALSE(formula::parse("1a"));
+    EXPECT_FALSE(formula::parse("_a"));
+}
+
 TEST(TestFormulaEvaluate, one)
 {
     ASSERT_EQ(1.0, formula::parse("1")->evaluate());

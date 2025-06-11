@@ -322,10 +322,9 @@ const auto make_binary_op_seq = [](auto &ctx)
 using Expr = std::shared_ptr<Node>;
 
 // Terminal parsers
-// const auto number = bp::double_;
-const auto alpha = bp::char_('a', 'z');
+const auto alpha = bp::char_('a', 'z') | bp::char_('A', 'Z');
 const auto digit = bp::char_('0', '9');
-const auto alnum = alpha | digit;
+const auto alnum = alpha | digit | bp::char_('_');
 const auto identifier = bp::lexeme[alpha >> *alnum];
 
 // Grammar rules
