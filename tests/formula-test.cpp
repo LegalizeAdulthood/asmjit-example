@@ -202,6 +202,15 @@ TEST(TestAssembledFormulaEvaluate, divide)
     ASSERT_NEAR(3.2, formula->evaluate(), 1e-6);
 }
 
+TEST(TestAssembledFormulaEvaluate, avogadrosNumberDivide)
+{
+    const auto formula{formula::parse("6.02e23/2")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->assemble());
+
+    ASSERT_NEAR(3.01e23, formula->evaluate(), 1e-6);
+}
+
 TEST(TestAssembledFormulaEvaluate, unaryNegate)
 {
     const auto formula{formula::parse("--1.6")};
@@ -299,6 +308,15 @@ TEST(TestCompiledFormulaEvaluate, divide)
     ASSERT_TRUE(formula->compile());
 
     ASSERT_NEAR(3.2, formula->evaluate(), 1e-6);
+}
+
+TEST(TestCompiledFormulaEvaluate, avogadrosNumberDivide)
+{
+    const auto formula{formula::parse("6.02e23/2")};
+    ASSERT_TRUE(formula);
+    ASSERT_TRUE(formula->compile());
+
+    ASSERT_NEAR(3.01e23, formula->evaluate(), 1e-6);
 }
 
 TEST(TestCompiledFormulaEvaluate, unaryNegate)
