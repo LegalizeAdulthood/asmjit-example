@@ -24,41 +24,49 @@ namespace
 {
 
 using SymbolTable = std::map<std::string, double>;
+using ConstantLabels = std::map<double, asmjit::Label>;
+using SymbolLabels = std::map<std::string, asmjit::Label>;
 
-struct Constants
+struct DataSection
 {
-    asmjit::Section *data{};                      // Section for data storage
-    std::map<double, asmjit::Label> labels;       // Map of constants to labels
-    std::map<std::string, asmjit::Label> symbols; // Map of symbols to labels
+    asmjit::Section *data{};  // Section for data storage
+    ConstantLabels constants; // Map of constants to labels
+    SymbolLabels symbols;     // Map of symbols to labels
 };
 
-asmjit::Label get_constant_label(asmjit::x86::Assembler &assem, Constants &constants, double value)
+struct EmitterState
 {
-    if (const auto it = constants.labels.find(value); it != constants.labels.end())
+    SymbolTable symbols;
+    DataSection data;
+};
+
+asmjit::Label get_constant_label(asmjit::x86::Assembler &assem, ConstantLabels &labels, double value)
+{
+    if (const auto it = labels.find(value); it != labels.end())
     {
         return it->second;
     }
 
     // Create a new label for the constant
     asmjit::Label label = assem.newLabel();
-    constants.labels[value] = label;
+    labels[value] = label;
     return label;
 }
 
-asmjit::Label get_symbol_label(asmjit::x86::Assembler &assem, Constants &constants, std::string name)
+asmjit::Label get_symbol_label(asmjit::x86::Assembler &assem, SymbolLabels &labels, std::string name)
 {
-    if (const auto it = constants.symbols.find(std::string{name}); it != constants.symbols.end())
+    if (const auto it = labels.find(name); it != labels.end())
     {
         return it->second;
     }
 
     // Create a new label for the symbol
     asmjit::Label label = assem.newNamedLabel(name.c_str());
-    constants.symbols[name] = label;
+    labels[name] = label;
     return label;
 }
 
-void emit_data_section(asmjit::x86::Assembler &assem, const SymbolTable &symbols, Constants &constants)
+void emit_data_section(asmjit::x86::Assembler &assem, const SymbolTable &symbols, DataSection &constants)
 {
     assem.section(constants.data);
     for (const auto &[name, label] : constants.symbols)
@@ -73,7 +81,7 @@ void emit_data_section(asmjit::x86::Assembler &assem, const SymbolTable &symbols
             throw std::runtime_error("Symbol not found: " + name);
         }
     }
-    for (const auto &[value, label] : constants.labels)
+    for (const auto &[value, label] : constants.constants)
     {
         assem.bind(label);
         assem.embedDouble(value); // Embed the double value in the data section
@@ -86,8 +94,8 @@ public:
     virtual ~Node() = default;
 
     virtual double evaluate(const SymbolTable &symbols) const = 0;
-    virtual bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols, Constants &data) const = 0;
-    virtual bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result) const = 0;
+    virtual bool assemble(asmjit::x86::Assembler &assem, EmitterState &state) const = 0;
+    virtual bool compile(asmjit::x86::Compiler &comp, EmitterState &state, asmjit::x86::Xmm result) const = 0;
 };
 
 class NumberNode : public Node
@@ -100,8 +108,8 @@ public:
     ~NumberNode() override = default;
 
     double evaluate(const SymbolTable & /*symbols*/) const override;
-    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols, Constants &data) const override;
-    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result) const override;
+    bool assemble(asmjit::x86::Assembler &assem, EmitterState &state) const override;
+    bool compile(asmjit::x86::Compiler &comp, EmitterState &state, asmjit::x86::Xmm result) const override;
 
 private:
     double m_value{};
@@ -112,14 +120,14 @@ double NumberNode::evaluate(const SymbolTable &) const
     return m_value;
 }
 
-bool NumberNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols, Constants &data) const
+bool NumberNode::assemble(asmjit::x86::Assembler &assem, EmitterState &state) const
 {
-    asmjit::Label label = get_constant_label(assem, data, m_value);
+    asmjit::Label label = get_constant_label(assem, state.data.constants, m_value);
     assem.movq(asmjit::x86::xmm0, asmjit::x86::ptr(label));
     return true;
 }
 
-bool NumberNode::compile(asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result) const
+bool NumberNode::compile(asmjit::x86::Compiler &comp, EmitterState &state, asmjit::x86::Xmm result) const
 {
     asmjit::x86::Gp tmp = comp.newGpq();
     comp.mov(tmp, m_value);
@@ -139,8 +147,8 @@ public:
     ~IdentifierNode() override = default;
 
     double evaluate(const SymbolTable &symbols) const override;
-    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols, Constants &data) const override;
-    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result) const override;
+    bool assemble(asmjit::x86::Assembler &assem, EmitterState &state) const override;
+    bool compile(asmjit::x86::Compiler &comp, EmitterState &state, asmjit::x86::Xmm result) const override;
 
 private:
     std::string m_name;
@@ -155,24 +163,24 @@ double IdentifierNode::evaluate(const SymbolTable &symbols) const
     return 0.0;
 }
 
-bool IdentifierNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols, Constants &data) const
+bool IdentifierNode::assemble(asmjit::x86::Assembler &assem, EmitterState &state) const
 {
     asmjit::Label label;
-    if (const auto &it = symbols.find(m_name); it != symbols.end())
+    if (const auto &it = state.symbols.find(m_name); it != state.symbols.end())
     {
-        label = get_symbol_label(assem, data, it->first);
+        label = get_symbol_label(assem, state.data.symbols, it->first);
     }
     else
     {
-        label = get_constant_label(assem, data, 0.0);
+        label = get_constant_label(assem, state.data.constants, 0.0);
     }
     assem.movq(asmjit::x86::xmm0, asmjit::x86::ptr(label));
     return true;
 }
 
-bool IdentifierNode::compile(asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result) const
+bool IdentifierNode::compile(asmjit::x86::Compiler &comp, EmitterState &state, asmjit::x86::Xmm result) const
 {
-    const double value{evaluate(map)};
+    const double value{evaluate(state.symbols)};
     asmjit::x86::Gp tmp = comp.newGpq();
     comp.mov(tmp, value);
     comp.movq(result, tmp);
@@ -192,8 +200,8 @@ public:
     ~UnaryOpNode() override = default;
 
     double evaluate(const SymbolTable &symbols) const override;
-    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols, Constants &data) const override;
-    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result) const override;
+    bool assemble(asmjit::x86::Assembler &assem, EmitterState &state) const override;
+    bool compile(asmjit::x86::Compiler &comp, EmitterState &state, asmjit::x86::Xmm result) const override;
 
 private:
     char m_op;
@@ -213,15 +221,15 @@ double UnaryOpNode::evaluate(const SymbolTable &symbols) const
     throw std::runtime_error(std::string{"Invalid unary prefix operator '"} + m_op + "'");
 }
 
-bool UnaryOpNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols, Constants &data) const
+bool UnaryOpNode::assemble(asmjit::x86::Assembler &assem, EmitterState &state) const
 {
     if (m_op == '+')
     {
-        return m_operand->assemble(assem, symbols, data);
+        return m_operand->assemble(assem, state);
     }
     if (m_op == '-')
     {
-        if (!m_operand->assemble(assem, symbols, data))
+        if (!m_operand->assemble(assem, state))
         {
             return false;
         }
@@ -234,16 +242,16 @@ bool UnaryOpNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &sym
     return false;
 }
 
-bool UnaryOpNode::compile(asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result) const
+bool UnaryOpNode::compile(asmjit::x86::Compiler &comp, EmitterState &state, asmjit::x86::Xmm result) const
 {
     if (m_op == '+')
     {
-        return m_operand->compile(comp, map, result);
+        return m_operand->compile(comp, state, result);
     }
     if (m_op == '-')
     {
         asmjit::x86::Xmm operand{comp.newXmm()};
-        if (!m_operand->compile(comp, map, operand))
+        if (!m_operand->compile(comp, state, operand))
         {
             return false;
         }
@@ -273,8 +281,8 @@ public:
     ~BinaryOpNode() override = default;
 
     double evaluate(const SymbolTable &symbols) const override;
-    bool assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols, Constants &data) const override;
-    bool compile(asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result) const override;
+    bool assemble(asmjit::x86::Assembler &assem, EmitterState &state) const override;
+    bool compile(asmjit::x86::Compiler &comp, EmitterState &state, asmjit::x86::Xmm result) const override;
 
 private:
     std::shared_ptr<Node> m_left;
@@ -305,12 +313,12 @@ double BinaryOpNode::evaluate(const SymbolTable &symbols) const
     throw std::runtime_error(std::string{"Invalid binary operator '"} + m_op + "'");
 }
 
-bool BinaryOpNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &symbols, Constants &data) const
+bool BinaryOpNode::assemble(asmjit::x86::Assembler &assem, EmitterState &state) const
 {
-    m_left->assemble(assem, symbols, data);
+    m_left->assemble(assem, state);
     assem.movq(asmjit::x86::rax, asmjit::x86::xmm0); // Save left operand
     assem.push(asmjit::x86::rax);                    // Push left operand onto stack
-    m_right->assemble(assem, symbols, data);
+    m_right->assemble(assem, state);
     assem.movq(asmjit::x86::xmm1, asmjit::x86::xmm0); // Move right operand to xmm1
     assem.pop(asmjit::x86::rax);                      // Load left operand into rax
     assem.movq(asmjit::x86::xmm0, asmjit::x86::rax);  // Move left operand to xmm0
@@ -337,12 +345,12 @@ bool BinaryOpNode::assemble(asmjit::x86::Assembler &assem, const SymbolTable &sy
     return false;
 }
 
-bool BinaryOpNode::compile(asmjit::x86::Compiler &comp, const SymbolTable &map, asmjit::x86::Xmm result) const
+bool BinaryOpNode::compile(asmjit::x86::Compiler &comp, EmitterState &state, asmjit::x86::Xmm result) const
 {
     asmjit::x86::Xmm left{result};
-    m_left->compile(comp, map, left);
+    m_left->compile(comp, state, left);
     asmjit::x86::Xmm right{comp.newXmm()};
-    m_right->compile(comp, map, right);
+    m_right->compile(comp, state, right);
     if (m_op == '+')
     {
         comp.addsd(left, right);
@@ -415,14 +423,14 @@ public:
     ParsedFormula(std::shared_ptr<Node> ast) :
         m_ast(ast)
     {
-        m_symbols["e"] = std::exp(1.0);
-        m_symbols["pi"] = std::atan2(0.0, -1.0);
+        m_state.symbols["e"] = std::exp(1.0);
+        m_state.symbols["pi"] = std::atan2(0.0, -1.0);
     }
     ~ParsedFormula() override = default;
 
     void set_value(std::string_view name, double value) override
     {
-        m_symbols[std::string{name}] = value;
+        m_state.symbols[std::string{name}] = value;
     }
 
     double evaluate() override;
@@ -432,17 +440,16 @@ public:
 private:
     bool init_code_holder(asmjit::CodeHolder &code);
 
-    SymbolTable m_symbols;
+    EmitterState m_state;
     std::shared_ptr<Node> m_ast;
     Function *m_function{};
     asmjit::JitRuntime m_runtime;
     asmjit::FileLogger m_logger{stdout};
-    Constants m_data{};
 };
 
 double ParsedFormula::evaluate()
 {
-    return m_function ? m_function() : m_ast->evaluate(m_symbols);
+    return m_function ? m_function() : m_ast->evaluate(m_state.symbols);
 }
 
 bool ParsedFormula::init_code_holder(asmjit::CodeHolder &code)
@@ -450,7 +457,7 @@ bool ParsedFormula::init_code_holder(asmjit::CodeHolder &code)
     code.init(m_runtime.environment(), m_runtime.cpuFeatures());
     code.setLogger(&m_logger);
     if (asmjit::Error err =
-            code.newSection(&m_data.data, ".data", SIZE_MAX, asmjit::SectionFlags::kNone, sizeof(double), 0))
+            code.newSection(&m_state.data.data, ".data", SIZE_MAX, asmjit::SectionFlags::kNone, sizeof(double), 0))
     {
         std::cerr << "Failed to create data section: " << asmjit::DebugUtils::errorAsString(err) << '\n';
         return false;
@@ -466,13 +473,13 @@ bool ParsedFormula::assemble()
         return false;
     }
     asmjit::x86::Assembler assem(&code);
-    if (!m_ast->assemble(assem, m_symbols, m_data))
+    if (!m_ast->assemble(assem, m_state))
     {
         std::cerr << "Failed to compile AST\n";
         return false;
     }
     assem.ret();
-    emit_data_section(assem, m_symbols, m_data);
+    emit_data_section(assem, m_state.symbols, m_state.data);
 
     if (const asmjit::Error err = m_runtime.add(&m_function, &code); err || !m_function)
     {
@@ -493,7 +500,7 @@ bool ParsedFormula::compile()
     asmjit::x86::Compiler comp(&code);
     comp.addFunc(asmjit::FuncSignature::build<double>());
     asmjit::x86::Xmm result = comp.newXmmSd();
-    if (!m_ast->compile(comp, m_symbols, result))
+    if (!m_ast->compile(comp, m_state, result))
     {
         std::cerr << "Failed to compile AST\n";
         return false;
