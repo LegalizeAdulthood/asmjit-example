@@ -2,7 +2,7 @@
 
 # AsmJit Example
 
-Sample code for the video JIT Code Generation with AsmJit.
+Sample code for the video [JIT Code Generation with AsmJit](https://www.youtube.com/watch?v=HkThHWX_lgU).
 
 [Utah C++ Programmers](https://meetup.com/utah-cpp-programmers)\
 [Past Topics](https://utahcpp.wordpress.com/past-meeting-topics/)\
